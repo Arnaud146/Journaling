@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Journal</title>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #ffffff;
+    --ink: #1c1c1a;
+    --ink-soft: #6b6b66;
+    --ink-faint: #b5b5af;
+    --line: #e7e7e3;
+    --accent: #1c1c1a;
+    --dot: #1c1c1a;
+    --today-ring: #1c1c1a;
+    --radius: 10px;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body { height: 100%; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .app {
+    width: 100%;
+    max-width: 760px;
+    padding: 32px 20px 48px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---------- Header ---------- */
+  header.cal-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    gap: 12px;
+  }
+
+  .cal-title {
+    font-family: var(--font-serif);
+    font-size: 1.75rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+
+  .cal-title .year {
+    color: var(--ink-faint);
+    font-weight: 400;
+    margin-left: 8px;
+    font-size: 1.4rem;
+  }
+
+  .cal-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .cal-nav button {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: var(--ink-soft);
+    font-family: var(--font-ui);
+    font-size: 0.85rem;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    line-height: 1;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .cal-nav button:hover { background: var(--line); color: var(--ink); }
+
+  .cal-nav button.nav-arrow { font-size: 1.05rem; padding: 8px 12px; }
+
+  /* ---------- Grid ---------- */
+  .weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    margin-bottom: 8px;
+  }
+
+  .weekdays span {
+    text-align: center;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-faint);
+    padding: 6px 0;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+  }
+
+  .day {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    background: transparent;
+    font-family: var(--font-ui);
+    font-size: 0.9rem;
+    color: var(--ink);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    transition: background 0.15s, border-color 0.15s, transform 0.06s;
+    appearance: none;
+    padding: 0;
+  }
+
+  .day:hover { background: var(--surface); border-color: var(--line); }
+  .day:active { transform: scale(0.97); }
+
+  .day.empty { cursor: default; }
+  .day.empty:hover { background: transparent; border-color: transparent; }
+
+  .day.other { visibility: hidden; }
+
+  .day.future { color: var(--ink-faint); }
+
+  .day.today .num {
+    background: var(--today-ring);
+    color: var(--bg);
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .day .num {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+  }
+
+  .day .dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: transparent;
+  }
+
+  .day.has-entry .dot { background: var(--dot); }
+  .day.future.has-entry .dot { background: var(--ink-faint); }
+
+  /* ---------- Footer stats ---------- */
+  .stats {
+    margin-top: 28px;
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--ink-faint);
+  }
+
+  /* ---------- Editor overlay ---------- */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(28, 28, 26, 0.18);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+    z-index: 10;
+  }
+
+  .overlay.open { opacity: 1; pointer-events: auto; }
+
+  .editor {
+    background: var(--surface);
+    width: 100%;
+    max-width: 620px;
+    max-height: 86vh;
+    border-radius: 16px;
+    box-shadow: 0 24px 60px rgba(28, 28, 26, 0.18);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transform: translateY(10px) scale(0.985);
+    transition: transform 0.18s ease;
+  }
+
+  .overlay.open .editor { transform: translateY(0) scale(1); }
+
+  .editor-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px 0;
+  }
+
+  .editor-date {
+    font-family: var(--font-serif);
+    font-size: 1.15rem;
+    color: var(--ink);
+  }
+
+  .editor-head .head-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .editor-head button {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: var(--ink-faint);
+    font-size: 0.8rem;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .editor-head button:hover { background: var(--line); color: var(--ink); }
+
+  .editor-head .btn-close { font-size: 1.05rem; line-height: 1; }
+
+  .editor textarea {
+    flex: 1;
+    border: none;
+    outline: none;
+    resize: none;
+    padding: 16px 24px 12px;
+    font-family: var(--font-serif);
+    font-size: 1.05rem;
+    line-height: 1.65;
+    color: var(--ink);
+    background: transparent;
+    min-height: 300px;
+  }
+
+  .editor textarea::placeholder { color: var(--ink-faint); }
+
+  .editor-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 24px 16px;
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+  }
+
+  .save-state { transition: opacity 0.3s; }
+
+  /* ---------- Mobile ---------- */
+  @media (max-width: 560px) {
+    .app { padding: 20px 12px 32px; }
+    .cal-title { font-size: 1.35rem; }
+    .cal-title .year { font-size: 1.1rem; }
+    .grid { gap: 4px; }
+    .day { font-size: 0.8rem; border-radius: 8px; }
+    .day .num, .day.today .num { width: 24px; height: 24px; }
+    .overlay { padding: 0; align-items: stretch; }
+    .editor {
+      max-width: none;
+      max-height: none;
+      height: 100%;
+      border-radius: 0;
+    }
+  }
+</style>
+</head>
+<body>
+  <div class="app">
+    <header class="cal-header">
+      <h1 class="cal-title"><span id="monthName"></span><span class="year" id="yearName"></span></h1>
+      <nav class="cal-nav">
+        <button id="btnToday" type="button">Aujourd’hui</button>
+        <button id="btnPrev" class="nav-arrow" type="button" aria-label="Mois précédent">‹</button>
+        <button id="btnNext" class="nav-arrow" type="button" aria-label="Mois suivant">›</button>
+      </nav>
+    </header>
+
+    <div class="weekdays">
+      <span>Lun</span><span>Mar</span><span>Mer</span><span>Jeu</span><span>Ven</span><span>Sam</span><span>Dim</span>
+    </div>
+
+    <div class="grid" id="grid"></div>
+
+    <p class="stats" id="stats"></p>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="editor" role="dialog" aria-modal="true" aria-labelledby="editorDate">
+      <div class="editor-head">
+        <div class="editor-date" id="editorDate"></div>
+        <div class="head-actions">
+          <button id="btnDelete" type="button" title="Effacer cette entrée">Effacer</button>
+          <button id="btnClose" class="btn-close" type="button" aria-label="Fermer">✕</button>
+        </div>
+      </div>
+      <textarea id="editorText" placeholder="Écris quelque chose…" spellcheck="true"></textarea>
+      <div class="editor-foot">
+        <span id="wordCount"></span>
+        <span class="save-state" id="saveState"></span>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const STORAGE_KEY = "journal.entries.v1";
+
+  const MONTHS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+  const DAYS_FULL = ["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"];
+
+  const grid = document.getElementById("grid");
+  const monthName = document.getElementById("monthName");
+  const yearName = document.getElementById("yearName");
+  const stats = document.getElementById("stats");
+  const overlay = document.getElementById("overlay");
+  const editorDate = document.getElementById("editorDate");
+  const editorText = document.getElementById("editorText");
+  const wordCount = document.getElementById("wordCount");
+  const saveState = document.getElementById("saveState");
+
+  let entries = loadEntries();
+  let view = new Date();
+  view.setDate(1);
+  let openKey = null;
+  let saveTimer = null;
+
+  function loadEntries() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+    } catch {
+      return {};
+    }
+  }
+
+  function persist() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    } catch {
+      saveState.textContent = "⚠ sauvegarde impossible";
+    }
+  }
+
+  function keyOf(y, m, d) {
+    return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+
+  function render() {
+    const y = view.getFullYear();
+    const m = view.getMonth();
+    monthName.textContent = MONTHS[m];
+    yearName.textContent = y;
+
+    const first = new Date(y, m, 1);
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    // Monday-first offset: getDay() gives 0=Sunday
+    const offset = (first.getDay() + 6) % 7;
+
+    const today = new Date();
+    const todayKey = keyOf(today.getFullYear(), today.getMonth(), today.getDate());
+
+    grid.innerHTML = "";
+
+    for (let i = 0; i < offset; i++) {
+      const cell = document.createElement("button");
+      cell.className = "day other empty";
+      cell.tabIndex = -1;
+      cell.disabled = true;
+      grid.appendChild(cell);
+    }
+
+    let monthEntries = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const k = keyOf(y, m, d);
+      const cell = document.createElement("button");
+      cell.type = "button";
+      cell.className = "day";
+      if (k === todayKey) cell.classList.add("today");
+      if (new Date(y, m, d) > today) cell.classList.add("future");
+      if (entries[k] && entries[k].trim()) {
+        cell.classList.add("has-entry");
+        monthEntries++;
+      }
+      cell.innerHTML = `<span class="num">${d}</span><span class="dot"></span>`;
+      cell.setAttribute("aria-label", formatLong(y, m, d));
+      cell.addEventListener("click", () => openEditor(y, m, d));
+      grid.appendChild(cell);
+    }
+
+    const total = Object.keys(entries).filter(k => entries[k] && entries[k].trim()).length;
+    stats.textContent = monthEntries > 0
+      ? `${monthEntries} entrée${monthEntries > 1 ? "s" : ""} ce mois-ci · ${total} au total`
+      : total > 0 ? `${total} entrée${total > 1 ? "s" : ""} au total` : "";
+  }
+
+  function formatLong(y, m, d) {
+    const date = new Date(y, m, d);
+    return `${DAYS_FULL[date.getDay()]} ${d} ${MONTHS[m].toLowerCase()} ${y}`;
+  }
+
+  function openEditor(y, m, d) {
+    openKey = keyOf(y, m, d);
+    editorDate.textContent = capitalize(formatLong(y, m, d));
+    editorText.value = entries[openKey] || "";
+    saveState.textContent = "";
+    updateWordCount();
+    overlay.classList.add("open");
+    setTimeout(() => editorText.focus(), 180);
+  }
+
+  function closeEditor() {
+    if (!openKey) return;
+    flushSave();
+    openKey = null;
+    overlay.classList.remove("open");
+    render();
+  }
+
+  function scheduleSave() {
+    saveState.textContent = "…";
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(flushSave, 500);
+  }
+
+  function flushSave() {
+    clearTimeout(saveTimer);
+    if (!openKey) return;
+    const text = editorText.value;
+    if (text.trim()) {
+      entries[openKey] = text;
+    } else {
+      delete entries[openKey];
+    }
+    persist();
+    saveState.textContent = "Enregistré";
+    setTimeout(() => { if (saveState.textContent === "Enregistré") saveState.textContent = ""; }, 1500);
+  }
+
+  function updateWordCount() {
+    const words = editorText.value.trim().split(/\s+/).filter(Boolean).length;
+    wordCount.textContent = words > 0 ? `${words} mot${words > 1 ? "s" : ""}` : "";
+  }
+
+  function capitalize(s) {
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  // --- Events ---
+  document.getElementById("btnPrev").addEventListener("click", () => {
+    view.setMonth(view.getMonth() - 1);
+    render();
+  });
+
+  document.getElementById("btnNext").addEventListener("click", () => {
+    view.setMonth(view.getMonth() + 1);
+    render();
+  });
+
+  document.getElementById("btnToday").addEventListener("click", () => {
+    const now = new Date();
+    view = new Date(now.getFullYear(), now.getMonth(), 1);
+    render();
+    openEditor(now.getFullYear(), now.getMonth(), now.getDate());
+  });
+
+  document.getElementById("btnClose").addEventListener("click", closeEditor);
+
+  document.getElementById("btnDelete").addEventListener("click", () => {
+    if (!openKey) return;
+    if (editorText.value.trim() && !confirm("Effacer cette entrée ?")) return;
+    editorText.value = "";
+    updateWordCount();
+    flushSave();
+    editorText.focus();
+  });
+
+  overlay.addEventListener("mousedown", (e) => {
+    if (e.target === overlay) closeEditor();
+  });
+
+  editorText.addEventListener("input", () => {
+    updateWordCount();
+    scheduleSave();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (overlay.classList.contains("open")) {
+      if (e.key === "Escape") closeEditor();
+      return;
+    }
+    if (e.key === "ArrowLeft") {
+      view.setMonth(view.getMonth() - 1);
+      render();
+    } else if (e.key === "ArrowRight") {
+      view.setMonth(view.getMonth() + 1);
+      render();
+    }
+  });
+
+  window.addEventListener("beforeunload", flushSave);
+
+  render();
+})();
+</script>
+</body>
+</html>
